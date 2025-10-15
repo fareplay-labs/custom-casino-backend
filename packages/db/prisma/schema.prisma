@@ -1,0 +1,196 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Casino {
+  id              String   @id @default(uuid())
+  
+  // Casino identity
+  name            String
+  slug            String   @unique
+  ownerWallet     String
+  
+  // Solana configuration
+  programId       String
+  network         String   // devnet, mainnet-beta
+  poolId          String?  // Fare Vault pool ID
+  
+  // URLs
+  apiUrl          String?
+  wsUrl           String?
+  frontendUrl     String?
+  
+  // Metadata
+  description     String?
+  logo            String?
+  banner          String?
+  theme           Json?    // Color scheme, branding
+  
+  // Configuration
+  config          Json?    // Game settings, limits, etc.
+  
+  // Status
+  status          CasinoStatus @default(ACTIVE)
+  isPublic        Boolean  @default(true)
+  
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Relations
+  players         Player[]
+  bets            Bet[]
+  stats           CasinoStats[]
+  chatMessages    ChatMessage[]
+  systemEvents    SystemEvent[]
+  
+  @@index([slug])
+  @@index([ownerWallet])
+  @@index([status])
+}
+
+enum CasinoStatus {
+  ACTIVE
+  INACTIVE
+  MAINTENANCE
+  SUSPENDED
+}
+
+model Player {
+  id              String   @id @default(uuid())
+  casinoId        String
+  casino          Casino   @relation(fields: [casinoId], references: [id])
+  
+  walletAddress   String
+  username        String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  lastSeenAt      DateTime @default(now())
+  
+  // Stats (per casino)
+  totalBets       Int      @default(0)
+  totalWins       Int      @default(0)
+  totalLosses     Int      @default(0)
+  totalWagered    BigInt   @default(0)
+  totalPayout     BigInt   @default(0)
+  
+  // Relations
+  bets            Bet[]
+  chatMessages    ChatMessage[]
+  
+  @@unique([casinoId, walletAddress])
+  @@index([walletAddress])
+  @@index([casinoId])
+}
+
+model Bet {
+  id              String   @id @default(uuid())
+  casinoId        String
+  casino          Casino   @relation(fields: [casinoId], references: [id])
+  playerId        String
+  player          Player   @relation(fields: [playerId], references: [id])
+  
+  // Transaction details
+  signature       String   @unique
+  blockTime       DateTime
+  slot            BigInt
+  
+  // Bet details
+  gameType        String
+  amount          BigInt
+  payout          BigInt   @default(0)
+  multiplier      Float?
+  
+  // Outcome
+  status          BetStatus @default(PENDING)
+  won             Boolean?
+  
+  // Metadata
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  
+  @@index([casinoId])
+  @@index([playerId])
+  @@index([signature])
+  @@index([blockTime])
+  @@index([status])
+}
+
+enum BetStatus {
+  PENDING
+  SETTLED
+  FAILED
+}
+
+model ChatMessage {
+  id              String   @id @default(uuid())
+  casinoId        String
+  casino          Casino   @relation(fields: [casinoId], references: [id])
+  playerId        String
+  player          Player   @relation(fields: [playerId], references: [id])
+  
+  message         String
+  createdAt       DateTime @default(now())
+  
+  // Moderation
+  deleted         Boolean  @default(false)
+  deletedAt       DateTime?
+  
+  @@index([casinoId])
+  @@index([playerId])
+  @@index([createdAt])
+}
+
+model CasinoStats {
+  id              String   @id @default(uuid())
+  casinoId        String
+  casino          Casino   @relation(fields: [casinoId], references: [id])
+  
+  // Aggregated stats
+  totalBets       BigInt   @default(0)
+  totalWagered    BigInt   @default(0)
+  totalPayout     BigInt   @default(0)
+  totalPlayers    Int      @default(0)
+  
+  // Time-based stats
+  hourlyVolume    Json?    // { "2024-01-01T00:00:00Z": 1000000, ... }
+  dailyVolume     Json?
+  
+  // Last updated
+  updatedAt       DateTime @updatedAt
+  
+  @@index([casinoId])
+}
+
+model SystemEvent {
+  id              String   @id @default(uuid())
+  casinoId        String?
+  casino          Casino?  @relation(fields: [casinoId], references: [id])
+  
+  eventType       String
+  severity        EventSeverity @default(INFO)
+  message         String
+  metadata        Json?
+  
+  createdAt       DateTime @default(now())
+  
+  @@index([casinoId])
+  @@index([eventType])
+  @@index([severity])
+  @@index([createdAt])
+}
+
+enum EventSeverity {
+  DEBUG
+  INFO
+  WARN
+  ERROR
+  CRITICAL
+}
+
+

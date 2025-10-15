@@ -1,0 +1,801 @@
+{
+    "address": "FAREvmepkHArRWwLjHmwPQGL9Byg8iKF3hu1vewxTSXe",
+    "metadata": {
+      "name": "fare_vault",
+      "version": "0.1.0",
+      "spec": "0.1.0",
+      "description": "Created with Anchor"
+    },
+    "instructions": [
+      {
+        "name": "initialize",
+        "discriminator": [175, 175, 109, 31, 13, 152, 155, 237],
+        "accounts": [
+          {
+            "name": "payer",
+            "writable": true,
+            "signer": true
+          },
+          {
+            "name": "vault_state",
+            "writable": true,
+            "pda": {
+              "seeds": [
+                {
+                  "kind": "const",
+                  "value": [118, 97, 117, 108, 116, 95, 115, 116, 97, 116, 101]
+                }
+              ]
+            }
+          },
+          {
+            "name": "system_program",
+            "address": "11111111111111111111111111111111"
+          }
+        ],
+        "args": [
+          {
+            "name": "vs",
+            "type": {
+              "defined": {
+                "name": "VaultState"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "pool_register",
+        "discriminator": [46, 254, 199, 174, 177, 152, 139, 204],
+        "accounts": [
+          {
+            "name": "payer",
+            "writable": true,
+            "signer": true
+          },
+          {
+            "name": "pool",
+            "writable": true,
+            "signer": true
+          },
+          {
+            "name": "system_program",
+            "address": "11111111111111111111111111111111"
+          }
+        ],
+        "args": [
+          {
+            "name": "pc",
+            "type": {
+              "defined": {
+                "name": "PoolConfig"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "trial_register",
+        "discriminator": [212, 33, 155, 17, 177, 86, 161, 221],
+        "accounts": [
+          {
+            "name": "vault_state",
+            "writable": true,
+            "pda": {
+              "seeds": [
+                {
+                  "kind": "const",
+                  "value": [118, 97, 117, 108, 116, 95, 115, 116, 97, 116, 101]
+                }
+              ]
+            }
+          },
+          {
+            "name": "payer",
+            "writable": true,
+            "signer": true
+          },
+          {
+            "name": "trial",
+            "writable": true,
+            "signer": true
+          },
+          {
+            "name": "pool",
+            "writable": true
+          },
+          {
+            "name": "net_token",
+            "writable": true
+          },
+          {
+            "name": "host_token",
+            "writable": true
+          },
+          {
+            "name": "mint",
+            "writable": true
+          },
+          {
+            "name": "payer_token",
+            "writable": true
+          },
+          {
+            "name": "token_program"
+          },
+          {
+            "name": "system_program",
+            "address": "11111111111111111111111111111111"
+          }
+        ],
+        "args": [
+          {
+            "name": "qk_actual",
+            "type": {
+              "defined": {
+                "name": "QK"
+              }
+            }
+          },
+          {
+            "name": "mult",
+            "type": "f64"
+          },
+          {
+            "name": "extra_data_hash",
+            "type": "string"
+          }
+        ]
+      },
+      {
+        "name": "trial_resolve_rand",
+        "discriminator": [130, 235, 124, 151, 81, 25, 16, 192],
+        "accounts": [
+          {
+            "name": "user",
+            "writable": true
+          },
+          {
+            "name": "vault_state",
+            "writable": true,
+            "pda": {
+              "seeds": [
+                {
+                  "kind": "const",
+                  "value": [118, 97, 117, 108, 116, 95, 115, 116, 97, 116, 101]
+                }
+              ]
+            }
+          },
+          {
+            "name": "trial",
+            "writable": true
+          },
+          {
+            "name": "pool",
+            "writable": true
+          },
+          {
+            "name": "net_token",
+            "writable": true
+          },
+          {
+            "name": "host_token",
+            "writable": true
+          },
+          {
+            "name": "mint",
+            "writable": true
+          },
+          {
+            "name": "user_token",
+            "writable": true
+          },
+          {
+            "name": "multisig_authority"
+          },
+          {
+            "name": "vault_mint_signer",
+            "pda": {
+              "seeds": [
+                {
+                  "kind": "const",
+                  "value": [
+                    118, 97, 117, 108, 116, 95, 109, 105, 110, 116, 95, 115, 105,
+                    103, 110, 101, 114
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "name": "token_program"
+          },
+          {
+            "name": "resolver",
+            "writable": true,
+            "signer": true
+          }
+        ],
+        "args": [
+          {
+            "name": "randomness",
+            "type": {
+              "array": ["u8", 64]
+            }
+          }
+        ]
+      },
+      {
+        "name": "update_vault_state",
+        "discriminator": [6, 239, 235, 198, 248, 227, 17, 41],
+        "accounts": [
+          {
+            "name": "admin",
+            "signer": true
+          },
+          {
+            "name": "vault_state",
+            "writable": true,
+            "pda": {
+              "seeds": [
+                {
+                  "kind": "const",
+                  "value": [118, 97, 117, 108, 116, 95, 115, 116, 97, 116, 101]
+                }
+              ]
+            }
+          }
+        ],
+        "args": [
+          {
+            "name": "vs",
+            "type": {
+              "defined": {
+                "name": "VaultState"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "accounts": [
+      {
+        "name": "PoolState",
+        "discriminator": [247, 237, 227, 245, 215, 195, 222, 70]
+      },
+      {
+        "name": "TrialState",
+        "discriminator": [80, 243, 182, 13, 235, 252, 194, 115]
+      },
+      {
+        "name": "VaultState",
+        "discriminator": [228, 196, 82, 165, 98, 210, 235, 152]
+      }
+    ],
+    "events": [
+      {
+        "name": "AdminAddressUpdated",
+        "discriminator": [41, 190, 38, 144, 198, 155, 88, 201]
+      },
+      {
+        "name": "EvThresholdUpdated",
+        "discriminator": [21, 2, 227, 23, 107, 87, 123, 194]
+      },
+      {
+        "name": "FeeCharged",
+        "discriminator": [10, 15, 44, 253, 165, 0, 86, 248]
+      },
+      {
+        "name": "FeeNetworkPercentUpdated",
+        "discriminator": [189, 92, 88, 176, 214, 84, 9, 234]
+      },
+      {
+        "name": "MinimumFeeBurnPercentUpdated",
+        "discriminator": [177, 53, 222, 10, 101, 156, 20, 76]
+      },
+      {
+        "name": "NetworkFeeRecipientAddressUpdated",
+        "discriminator": [187, 173, 27, 83, 231, 21, 17, 173]
+      },
+      {
+        "name": "PoolAccumulatedAmountReleased",
+        "discriminator": [24, 220, 55, 231, 249, 157, 219, 208]
+      },
+      {
+        "name": "PoolAccumulatedAmountUpdated",
+        "discriminator": [200, 54, 121, 99, 14, 180, 19, 138]
+      },
+      {
+        "name": "PoolRegistered",
+        "discriminator": [77, 114, 165, 230, 33, 230, 135, 215]
+      },
+      {
+        "name": "ResolverAddressUpdated",
+        "discriminator": [23, 231, 0, 252, 138, 48, 163, 241]
+      },
+      {
+        "name": "TrialRegistered",
+        "discriminator": [182, 0, 212, 203, 142, 87, 214, 221]
+      },
+      {
+        "name": "TrialResolved",
+        "discriminator": [196, 198, 203, 60, 5, 136, 167, 206]
+      }
+    ],
+    "errors": [
+      {
+        "code": 6000,
+        "name": "InvalidEV",
+        "msg": "Invalid EV Threshold"
+      },
+      {
+        "code": 6001,
+        "name": "InvalidFeeNetworkPct",
+        "msg": "Invalid Fee Network Pct"
+      },
+      {
+        "code": 6002,
+        "name": "InvalidMinFeeBurnPct",
+        "msg": "Invalid Min Fee Burn Pct"
+      },
+      {
+        "code": 6003,
+        "name": "InvalidNetworkFees",
+        "msg": "Invalid total Network fees"
+      },
+      {
+        "code": 6004,
+        "name": "InvalidFeeHostPct",
+        "msg": "Invalid Fee Host Pct"
+      },
+      {
+        "code": 6005,
+        "name": "InvalidFeePoolPct",
+        "msg": "Invalid Fee Pool Pct"
+      },
+      {
+        "code": 6006,
+        "name": "InvalidHostFees",
+        "msg": "Invalid total Host fees"
+      },
+      {
+        "code": 6007,
+        "name": "InvalidPoolProbability",
+        "msg": "Invalid pool probability"
+      },
+      {
+        "code": 6008,
+        "name": "InvalidMultiplier",
+        "msg": "The multiplier must be positive"
+      },
+      {
+        "code": 6009,
+        "name": "InvalidFeePercentSum",
+        "msg": "Sum of fee percents exceed 1"
+      },
+      {
+        "code": 6010,
+        "name": "InvalidK",
+        "msg": "Invalid K"
+      },
+      {
+        "code": 6011,
+        "name": "InvalidQ",
+        "msg": "Invalid Q"
+      },
+      {
+        "code": 6012,
+        "name": "InvalidQSum",
+        "msg": "Invalid Q sum"
+      },
+      {
+        "code": 6013,
+        "name": "EVTooHigh",
+        "msg": "The expected value is too high"
+      },
+      {
+        "code": 6014,
+        "name": "InvalidMultisigAuthority",
+        "msg": "Invalid multisig authority"
+      },
+      {
+        "code": 6015,
+        "name": "Impossible",
+        "msg": "Impossible error"
+      },
+      {
+        "code": 6016,
+        "name": "Overflow",
+        "msg": "Overflow occured"
+      }
+    ],
+    "types": [
+      {
+        "name": "AdminAddressUpdated",
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "new_admin",
+              "type": "pubkey"
+            }
+          ]
+        }
+      },
+      {
+        "name": "EvThresholdUpdated",
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "new_ev_threshold",
+              "type": "f64"
+            }
+          ]
+        }
+      },
+      {
+        "name": "FeeCharged",
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "fee_type",
+              "type": "u8"
+            },
+            {
+              "name": "pool_id",
+              "type": "pubkey"
+            },
+            {
+              "name": "trial_id",
+              "type": "pubkey"
+            },
+            {
+              "name": "fee_amount",
+              "type": "u64"
+            }
+          ]
+        }
+      },
+      {
+        "name": "FeeNetworkPercentUpdated",
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "new_fee_network_percent",
+              "type": "f64"
+            }
+          ]
+        }
+      },
+      {
+        "name": "MinimumFeeBurnPercentUpdated",
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "new_minimum_fee_burn_percent",
+              "type": "f64"
+            }
+          ]
+        }
+      },
+      {
+        "name": "NetworkFeeRecipientAddressUpdated",
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "new_network_fee_receipient",
+              "type": "pubkey"
+            }
+          ]
+        }
+      },
+      {
+        "name": "PoolAccumulatedAmountReleased",
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "pool_id",
+              "type": "pubkey"
+            },
+            {
+              "name": "trial_id",
+              "type": "pubkey"
+            },
+            {
+              "name": "receiver",
+              "type": "pubkey"
+            },
+            {
+              "name": "released_amount",
+              "type": "u64"
+            }
+          ]
+        }
+      },
+      {
+        "name": "PoolAccumulatedAmountUpdated",
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "pool_id",
+              "type": "pubkey"
+            },
+            {
+              "name": "trial_id",
+              "type": "pubkey"
+            },
+            {
+              "name": "new_accumulated_amount",
+              "type": "u64"
+            }
+          ]
+        }
+      },
+      {
+        "name": "PoolConfig",
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "manager",
+              "type": "pubkey"
+            },
+            {
+              "name": "fee_play_mul",
+              "type": "f64"
+            },
+            {
+              "name": "fee_loss_mul",
+              "type": "f64"
+            },
+            {
+              "name": "fee_mint_mul",
+              "type": "f64"
+            },
+            {
+              "name": "fee_host_pct",
+              "type": "f64"
+            },
+            {
+              "name": "fee_pool_pct",
+              "type": "f64"
+            },
+            {
+              "name": "probability",
+              "type": "f64"
+            },
+            {
+              "name": "min_limit_for_ticket",
+              "type": "f64"
+            }
+          ]
+        }
+      },
+      {
+        "name": "PoolRegistered",
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "pool_id",
+              "type": "pubkey"
+            },
+            {
+              "name": "manager_address",
+              "type": "pubkey"
+            },
+            {
+              "name": "fee_play_multiplier",
+              "type": "f64"
+            },
+            {
+              "name": "fee_loss_multiplier",
+              "type": "f64"
+            },
+            {
+              "name": "fee_mint_multiplier",
+              "type": "f64"
+            },
+            {
+              "name": "fee_host_percent",
+              "type": "f64"
+            },
+            {
+              "name": "fee_pool_percent",
+              "type": "f64"
+            },
+            {
+              "name": "min_limit_for_ticket",
+              "type": "f64"
+            },
+            {
+              "name": "probability",
+              "type": "f64"
+            }
+          ]
+        }
+      },
+      {
+        "name": "PoolState",
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "config",
+              "type": {
+                "defined": {
+                  "name": "PoolConfig"
+                }
+              }
+            },
+            {
+              "name": "accum",
+              "type": "u64"
+            }
+          ]
+        }
+      },
+      {
+        "name": "QK",
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "vec": {
+                "array": ["f64", 2]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "ResolverAddressUpdated",
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "new_resolver",
+              "type": "pubkey"
+            }
+          ]
+        }
+      },
+      {
+        "name": "TrialRegistered",
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "trial_id",
+              "type": "pubkey"
+            },
+            {
+              "name": "who",
+              "type": "pubkey"
+            },
+            {
+              "name": "pool_id",
+              "type": "pubkey"
+            },
+            {
+              "name": "multiplier",
+              "type": "u64"
+            },
+            {
+              "name": "qk",
+              "type": {
+                "defined": {
+                  "name": "QK"
+                }
+              }
+            },
+            {
+              "name": "extra_data_hash",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      {
+        "name": "TrialResolved",
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "trial_id",
+              "type": "pubkey"
+            },
+            {
+              "name": "result_index",
+              "type": "u64"
+            },
+            {
+              "name": "randomness",
+              "type": "f64"
+            }
+          ]
+        }
+      },
+      {
+        "name": "TrialState",
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "qk",
+              "type": {
+                "defined": {
+                  "name": "QK"
+                }
+              }
+            },
+            {
+              "name": "mult",
+              "type": "u64"
+            },
+            {
+              "name": "user",
+              "type": "pubkey"
+            },
+            {
+              "name": "user_token",
+              "type": "pubkey"
+            },
+            {
+              "name": "pool_id",
+              "type": "pubkey"
+            },
+            {
+              "name": "extra_data_hash",
+              "type": "string"
+            },
+            {
+              "name": "fee_network_pct",
+              "type": "f64"
+            }
+          ]
+        }
+      },
+      {
+        "name": "VaultState",
+        "type": {
+          "kind": "struct",
+          "fields": [
+            {
+              "name": "ev_threshold",
+              "type": "f64"
+            },
+            {
+              "name": "admin",
+              "type": "pubkey"
+            },
+            {
+              "name": "resolver",
+              "type": "pubkey"
+            },
+            {
+              "name": "net_fee_recipient",
+              "type": "pubkey"
+            },
+            {
+              "name": "fee_network_pct",
+              "type": "f64"
+            },
+            {
+              "name": "min_fee_burn_pct",
+              "type": "f64"
+            }
+          ]
+        }
+      }
+    ]
+  }
+  

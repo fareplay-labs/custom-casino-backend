@@ -1,0 +1,25 @@
+{
+  "name": "@fareplay/api",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@fastify/cors": "^8.5.0",
+    "@fastify/helmet": "^11.1.1",
+    "@fastify/jwt": "^7.2.4",
+    "@fastify/rate-limit": "^9.1.0",
+    "@fareplay/db": "*",
+    "@fareplay/utils": "*",
+    "@fareplay/solana": "*",
+    "@fareplay/sdk": "latest",
+    "fastify": "^4.25.2",
+    "ioredis": "^5.3.2"
+  }
+}
+
+

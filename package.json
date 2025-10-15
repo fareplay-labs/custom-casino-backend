@@ -1,0 +1,40 @@
+{
+  "name": "fareplay-casino-backend",
+  "version": "1.0.0",
+  "description": "Self-hostable Solana-based casino backend for FarePlay Protocol",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev --workspace=apps/api",
+    "dev:ws": "npm run dev --workspace=apps/ws",
+    "dev:processor": "npm run dev --workspace=apps/processor",
+    "dev": "concurrently \"npm run dev:api\" \"npm run dev:ws\" \"npm run dev:processor\"",
+    "build": "npm run build --workspaces --if-present",
+    "start:api": "npm run start --workspace=apps/api",
+    "start:ws": "npm run start --workspace=apps/ws",
+    "start:processor": "npm run start --workspace=apps/processor",
+    "db:generate": "npm run generate --workspace=packages/db",
+    "db:migrate": "npm run migrate --workspace=packages/db",
+    "db:studio": "npm run studio --workspace=packages/db",
+    "db:push": "npm run push --workspace=packages/db",
+    "lint": "eslint . --ext .ts,.tsx",
+    "type-check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@typescript-eslint/eslint-plugin": "^6.19.0",
+    "@typescript-eslint/parser": "^6.19.0",
+    "concurrently": "^8.2.2",
+    "eslint": "^8.56.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  }
+}
+

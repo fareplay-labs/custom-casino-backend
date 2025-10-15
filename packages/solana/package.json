@@ -1,0 +1,21 @@
+{
+  "name": "@fareplay/solana",
+  "version": "1.0.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@solana/web3.js": "^1.87.6",
+    "bs58": "^5.0.0",
+    "tweetnacl": "^1.0.3",
+    "@fareplay/utils": "*"
+  },
+  "devDependencies": {
+    "@types/bs58": "^4.0.4"
+  }
+}
+
+

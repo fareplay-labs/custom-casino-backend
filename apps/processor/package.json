@@ -1,0 +1,20 @@
+{
+  "name": "@fareplay/processor",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@fareplay/db": "*",
+    "@fareplay/utils": "*",
+    "@fareplay/solana": "*",
+    "bullmq": "^5.1.2",
+    "ioredis": "^5.3.2"
+  }
+}
+
+

@@ -1,0 +1,83 @@
+# Fly.io configuration for FarePlay Casino Backend
+# Replace 'my-casino' with your casino name
+
+app = "fareplay-casino"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  API_HOST = "0.0.0.0"
+  WS_HOST = "0.0.0.0"
+
+# Process groups for different services
+[processes]
+  api = "node apps/api/dist/index.js"
+  ws = "node apps/ws/dist/index.js"
+  processor = "node apps/processor/dist/index.js"
+
+# API service
+[[services]]
+  processes = ["api"]
+  http_checks = []
+  internal_port = 3000
+  protocol = "tcp"
+  script_checks = []
+
+  [services.concurrency]
+    hard_limit = 25
+    soft_limit = 20
+    type = "connections"
+
+  [[services.ports]]
+    force_https = true
+    handlers = ["http"]
+    port = 80
+
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port = 443
+
+  [[services.tcp_checks]]
+    grace_period = "10s"
+    interval = "15s"
+    restart_limit = 0
+    timeout = "2s"
+
+# WebSocket service
+[[services]]
+  processes = ["ws"]
+  http_checks = []
+  internal_port = 3001
+  protocol = "tcp"
+  script_checks = []
+
+  [services.concurrency]
+    hard_limit = 100
+    soft_limit = 80
+    type = "connections"
+
+  [[services.ports]]
+    handlers = ["http"]
+    port = 3001
+
+# Resource allocation
+[vm]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 512
+
+# Auto-scaling
+[[vm.size]]
+  name = "shared-cpu-1x"
+  cpu_cores = 1
+  memory_gb = 0.5
+
+# Metrics
+[metrics]
+  port = 9091
+  path = "/metrics"
+
+

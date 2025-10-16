@@ -7,6 +7,9 @@ primary_region = "iad"
 [build]
   dockerfile = "Dockerfile"
 
+[deploy]
+  release_command = "npx prisma migrate deploy --schema=packages/db/prisma/schema.prisma"
+
 [env]
   NODE_ENV = "production"
   API_HOST = "0.0.0.0"
@@ -63,17 +66,20 @@ primary_region = "iad"
     handlers = ["http"]
     port = 3001
 
+# Processor service (background worker - no external ports)
+[[services]]
+  processes = ["processor"]
+  internal_port = 8080
+
+  [services.concurrency]
+    type = "requests"
+    hard_limit = 1
+    soft_limit = 1
+
 # Resource allocation
 [vm]
-  cpu_kind = "shared"
-  cpus = 1
-  memory_mb = 512
-
-# Auto-scaling
-[[vm.size]]
-  name = "shared-cpu-1x"
-  cpu_cores = 1
-  memory_gb = 0.5
+  size = "shared-cpu-1x"
+  memory = 512
 
 # Metrics
 [metrics]

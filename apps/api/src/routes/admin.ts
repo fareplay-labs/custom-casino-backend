@@ -7,21 +7,24 @@ const logger = createLogger('api:routes:admin');
 interface CreateCasinoBody {
   name: string;
   slug: string;
-  ownerWallet: string;
-  poolId?: string;
-  description?: string;
+  ownerAddress: string;
+  poolAddress?: string;
+  shortDescription?: string;
+  longDescription?: string;
   frontendUrl?: string;
-  config?: any;
+  profileImage?: string;
+  bannerImage?: string;
+  theme?: any;
 }
 
 interface UpdateCasinoBody {
   name?: string;
-  description?: string;
+  shortDescription?: string;
+  longDescription?: string;
   frontendUrl?: string;
-  logo?: string;
-  banner?: string;
+  profileImage?: string;
+  bannerImage?: string;
   theme?: any;
-  config?: any;
   status?: 'ACTIVE' | 'INACTIVE' | 'MAINTENANCE' | 'SUSPENDED';
 }
 
@@ -29,10 +32,10 @@ export async function adminRoutes(fastify: FastifyInstance): Promise<void> {
   
   // Create a new casino
   fastify.post<{ Body: CreateCasinoBody }>('/casinos', async (request, reply) => {
-    const { name, slug, ownerWallet, poolId, description, frontendUrl, config } = request.body;
+    const { name, slug, ownerAddress, poolAddress, shortDescription, longDescription, frontendUrl, profileImage, bannerImage, theme } = request.body;
 
-    if (!name || !slug || !ownerWallet) {
-      return reply.code(400).send({ error: 'Missing required fields: name, slug, ownerWallet' });
+    if (!name || !slug || !ownerAddress) {
+      return reply.code(400).send({ error: 'Missing required fields: name, slug, ownerAddress' });
     }
 
     const db = getPrismaClient();
@@ -46,17 +49,29 @@ export async function adminRoutes(fastify: FastifyInstance): Promise<void> {
       return reply.code(400).send({ error: 'Slug already taken' });
     }
 
+    // Ensure user exists
+    let user = await db.user.findUnique({
+      where: { walletAddress: ownerAddress },
+    });
+
+    if (!user) {
+      user = await db.user.create({
+        data: { walletAddress: ownerAddress },
+      });
+    }
+
     const casino = await db.casino.create({
       data: {
         name,
         slug,
-        ownerWallet,
-        programId: process.env.PROGRAM_ID || '',
-        network: process.env.NETWORK || 'devnet',
-        poolId,
-        description,
+        ownerAddress,
+        poolAddress,
+        shortDescription,
+        longDescription,
         frontendUrl,
-        config,
+        profileImage,
+        bannerImage,
+        theme,
       },
     });
 
@@ -67,7 +82,7 @@ export async function adminRoutes(fastify: FastifyInstance): Promise<void> {
         id: casino.id,
         name: casino.name,
         slug: casino.slug,
-        ownerWallet: casino.ownerWallet,
+        ownerAddress: casino.ownerAddress,
         status: casino.status,
         createdAt: casino.createdAt,
       },
@@ -90,9 +105,10 @@ export async function adminRoutes(fastify: FastifyInstance): Promise<void> {
         id: casino.id,
         name: casino.name,
         slug: casino.slug,
-        ownerWallet: casino.ownerWallet,
+        ownerAddress: casino.ownerAddress,
         frontendUrl: casino.frontendUrl,
-        description: casino.description,
+        shortDescription: casino.shortDescription,
+        profileImage: casino.profileImage,
         status: casino.status,
         createdAt: casino.createdAt,
       })),
@@ -110,7 +126,6 @@ export async function adminRoutes(fastify: FastifyInstance): Promise<void> {
         _count: {
           select: {
             players: true,
-            bets: true,
           },
         },
       },
@@ -125,17 +140,17 @@ export async function adminRoutes(fastify: FastifyInstance): Promise<void> {
         id: casino.id,
         name: casino.name,
         slug: casino.slug,
-        ownerWallet: casino.ownerWallet,
-        poolId: casino.poolId,
-        description: casino.description,
-        logo: casino.logo,
-        banner: casino.banner,
+        ownerAddress: casino.ownerAddress,
+        poolAddress: casino.poolAddress,
+        shortDescription: casino.shortDescription,
+        longDescription: casino.longDescription,
+        profileImage: casino.profileImage,
+        bannerImage: casino.bannerImage,
         theme: casino.theme,
         frontendUrl: casino.frontendUrl,
         status: casino.status,
         isPublic: casino.isPublic,
         playerCount: casino._count.players,
-        betCount: casino._count.bets,
         createdAt: casino.createdAt,
       },
     };

@@ -8,14 +8,13 @@
     "dev": "tsc --watch"
   },
   "dependencies": {
+    "@coral-xyz/borsh": "^0.32.1",
+    "@fareplay/utils": "*",
     "@solana/web3.js": "^1.87.6",
     "bs58": "^5.0.0",
-    "tweetnacl": "^1.0.3",
-    "@fareplay/utils": "*"
+    "tweetnacl": "^1.0.3"
   },
   "devDependencies": {
     "@types/bs58": "^4.0.4"
   }
 }
-
-

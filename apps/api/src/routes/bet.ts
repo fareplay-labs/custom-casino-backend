@@ -4,45 +4,46 @@ import { authenticate, AuthenticatedRequest } from '../middleware/auth.js';
 
 export async function betRoutes(fastify: FastifyInstance): Promise<void> {
   
-  // Get bet by signature
-  fastify.get<{ Params: { signature: string } }>('/:signature', async (request, reply) => {
+  // Get trial by ID
+  fastify.get<{ Params: { trialId: string } }>('/:trialId', async (request, reply) => {
     const db = getPrismaClient();
-    const { signature } = request.params;
+    const { trialId } = request.params;
 
-    const bet = await db.bet.findUnique({
-      where: { signature },
+    const trial = await db.trial.findUnique({
+      where: { id: trialId },
       include: {
-        player: {
-          select: {
-            walletAddress: true,
-            username: true,
+        trialRegistered: {
+          include: {
+            trialRegisteredEvent: true,
           },
         },
+        trialResolved: {
+          include: {
+            trialResolvedEvent: true,
+          },
+        },
+        gameInstance: true,
       },
     });
 
-    if (!bet) {
-      return reply.code(404).send({ error: 'Bet not found' });
+    if (!trial) {
+      return reply.code(404).send({ error: 'Trial not found' });
     }
 
     return {
-      id: bet.id,
-      signature: bet.signature,
-      player: bet.player.username || 
-        `${bet.player.walletAddress.slice(0, 4)}...${bet.player.walletAddress.slice(-4)}`,
-      gameType: bet.gameType,
-      amount: bet.amount.toString(),
-      payout: bet.payout.toString(),
-      multiplier: bet.multiplier,
-      status: bet.status,
-      won: bet.won,
-      blockTime: bet.blockTime,
-      slot: bet.slot.toString(),
-      metadata: bet.metadata,
+      id: trial.id,
+      player: `${trial.who.slice(0, 4)}...${trial.who.slice(-4)}`,
+      poolAddress: trial.poolAddress,
+      resolved: !!trial.trialResolved,
+      resultK: trial.resultK?.toString(),
+      deltaAmount: trial.deltaAmount?.toString(),
+      blockTime: trial.trialRegistered?.trialRegisteredEvent.blockTime,
+      gameConfig: trial.extraDataHash,
+      gameResult: trial.gameInstance?.result,
     };
   });
 
-  // Get player's bets
+  // Get player's trials
   fastify.get('/player/history', {
     onRequest: [authenticate],
   }, async (request) => {
@@ -55,28 +56,32 @@ export async function betRoutes(fastify: FastifyInstance): Promise<void> {
     );
     const offset = parseInt((request.query as any)['offset'] as string) || 0;
 
-    const bets = await db.bet.findMany({
-      where: { playerId: user.playerId },
+    const trials = await db.trial.findMany({
+      where: { who: user.walletAddress },
       take: limit,
       skip: offset,
-      orderBy: { blockTime: 'desc' },
+      orderBy: { id: 'desc' },
+      include: {
+        trialRegistered: {
+          include: {
+            trialRegisteredEvent: true,
+          },
+        },
+        trialResolved: true,
+      },
     });
 
-    const total = await db.bet.count({
-      where: { playerId: user.playerId },
+    const total = await db.trial.count({
+      where: { who: user.walletAddress },
     });
 
     return {
-      bets: bets.map((bet: any) => ({
-        id: bet.id,
-        signature: bet.signature,
-        gameType: bet.gameType,
-        amount: bet.amount.toString(),
-        payout: bet.payout.toString(),
-        multiplier: bet.multiplier,
-        status: bet.status,
-        won: bet.won,
-        timestamp: bet.blockTime,
+      trials: trials.map((trial: any) => ({
+        id: trial.id,
+        poolAddress: trial.poolAddress,
+        resolved: !!trial.trialResolved,
+        deltaAmount: trial.deltaAmount?.toString(),
+        timestamp: trial.trialRegistered?.trialRegisteredEvent.blockTime,
       })),
       pagination: {
         total,
@@ -87,7 +92,7 @@ export async function betRoutes(fastify: FastifyInstance): Promise<void> {
     };
   });
 
-  // Get recent bets (public)
+  // Get recent trials (public)
   fastify.get('/recent', async (request) => {
     const db = getPrismaClient();
 
@@ -96,33 +101,32 @@ export async function betRoutes(fastify: FastifyInstance): Promise<void> {
       100
     );
 
-    const bets = await db.bet.findMany({
+    const trials = await db.trial.findMany({
       take: limit,
-      orderBy: { blockTime: 'desc' },
-      where: { status: 'SETTLED' },
+      orderBy: { id: 'desc' },
+      where: {
+        trialResolved: {
+          isNot: null,
+        },
+      },
       include: {
-        player: {
-          select: {
-            walletAddress: true,
-            username: true,
+        trialRegistered: {
+          include: {
+            trialRegisteredEvent: true,
           },
         },
+        trialResolved: true,
       },
     });
 
     return {
-      bets: bets.map((bet: any) => ({
-        id: bet.id,
-        signature: bet.signature,
-        player: bet.player.username || 
-          `${bet.player.walletAddress.slice(0, 4)}...${bet.player.walletAddress.slice(-4)}`,
-        gameType: bet.gameType,
-        amount: bet.amount.toString(),
-        payout: bet.payout.toString(),
-        won: bet.won,
-        timestamp: bet.blockTime,
+      trials: trials.map((trial: any) => ({
+        id: trial.id,
+        player: `${trial.who.slice(0, 4)}...${trial.who.slice(-4)}`,
+        poolAddress: trial.poolAddress,
+        deltaAmount: trial.deltaAmount?.toString(),
+        timestamp: trial.trialRegistered?.trialRegisteredEvent.blockTime,
       })),
     };
   });
 }
-

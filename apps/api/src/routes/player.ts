@@ -17,17 +17,29 @@ export async function playerRoutes(fastify: FastifyInstance): Promise<void> {
 
     const player = await db.player.findUnique({
       where: { id: user.playerId },
-      include: {
-        bets: {
-          take: 10,
-          orderBy: { blockTime: 'desc' },
-        },
-      },
     });
 
     if (!player) {
       return { error: 'Player not found' };
     }
+
+    // Get recent trials for this player
+    const recentTrials = await db.trial.findMany({
+      where: { 
+        who: player.walletAddress,
+        casinoId: player.casinoId,
+      },
+      take: 10,
+      orderBy: { id: 'desc' },
+      include: {
+        trialRegistered: {
+          include: {
+            trialRegisteredEvent: true,
+          },
+        },
+        trialResolved: true,
+      },
+    });
 
     return {
       id: player.id,
@@ -45,14 +57,12 @@ export async function playerRoutes(fastify: FastifyInstance): Promise<void> {
           ? ((player.totalWins / player.totalBets) * 100).toFixed(2) 
           : '0.00',
       },
-      recentBets: player.bets.map((bet: any) => ({
-        id: bet.id,
-        signature: bet.signature,
-        gameType: bet.gameType,
-        amount: bet.amount.toString(),
-        payout: bet.payout.toString(),
-        won: bet.won,
-        timestamp: bet.blockTime,
+      recentTrials: recentTrials.map((trial: any) => ({
+        id: trial.id,
+        poolAddress: trial.poolAddress,
+        resolved: !!trial.trialResolved,
+        deltaAmount: trial.deltaAmount?.toString(),
+        timestamp: trial.trialRegistered?.trialRegisteredEvent.blockTime,
       })),
     };
   });
@@ -117,7 +127,7 @@ export async function playerRoutes(fastify: FastifyInstance): Promise<void> {
       winRate: player.totalBets > 0 
         ? ((player.totalWins / player.totalBets) * 100).toFixed(2) 
         : '0.00',
-      profitLoss: (player.totalPayout - player.totalWagered).toString(),
+      profitLoss: (BigInt(player.totalPayout.toString()) - BigInt(player.totalWagered.toString())).toString(),
     };
   });
 }

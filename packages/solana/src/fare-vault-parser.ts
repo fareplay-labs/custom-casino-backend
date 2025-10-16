@@ -1,6 +1,7 @@
 import { PublicKey } from '@solana/web3.js';
 import { createLogger } from '@fareplay/utils';
 import bs58 from 'bs58';
+import * as borsh from '@coral-xyz/borsh';
 
 const logger = createLogger('solana:fare-vault-parser');
 
@@ -14,6 +15,14 @@ const DISCRIMINATORS = {
   TRIAL_REGISTER: Buffer.from([212, 33, 155, 17, 177, 86, 161, 221]),
   TRIAL_RESOLVE_RAND: Buffer.from([130, 235, 124, 151, 81, 25, 16, 192]),
   UPDATE_VAULT_STATE: Buffer.from([6, 239, 235, 198, 248, 227, 17, 41]),
+};
+
+// Event discriminators (from IDL)
+const EVENT_DISCRIMINATORS = {
+  POOL_REGISTERED: Buffer.from([77, 114, 165, 230, 33, 230, 135, 215]),
+  TRIAL_REGISTERED: Buffer.from([182, 0, 212, 203, 142, 87, 214, 221]),
+  TRIAL_RESOLVED: Buffer.from([196, 198, 203, 60, 5, 136, 167, 206]),
+  FEE_CHARGED: Buffer.from([10, 15, 44, 253, 165, 0, 86, 248]),
 };
 
 export class FareVaultParser {
@@ -37,10 +46,17 @@ export class FareVaultParser {
       
       // Find the instruction for your program
       const instruction = message.instructions.find((ix: any) => {
-        const accountKey = message.accountKeys[ix.programIdIndex];
-        // Handle both formats: { pubkey: PublicKey } and just PublicKey
-        const programIdStr = accountKey?.pubkey?.toString() || accountKey?.toString();
-        return programIdStr === this.programId.toString();
+        // Parsed transactions have programId directly on the instruction
+        if (ix.programId) {
+          return ix.programId.toString() === this.programId.toString();
+        }
+        // Fallback: unparsed transactions use programIdIndex
+        if (ix.programIdIndex !== undefined) {
+          const accountKey = message.accountKeys[ix.programIdIndex];
+          const programIdStr = accountKey?.pubkey?.toString() || accountKey?.toString();
+          return programIdStr === this.programId.toString();
+        }
+        return false;
       });
 
       if (!instruction) {
@@ -72,9 +88,18 @@ export class FareVaultParser {
       }
 
       // Extract accounts
-      const accounts = instruction.accounts.map((idx: number) => 
-        message.accountKeys[idx].pubkey.toString()
-      );
+      // Parsed transactions have accounts as PublicKey objects directly
+      const accounts = instruction.accounts.map((account: any) => {
+        if (typeof account === 'object' && account.pubkey) {
+          return account.pubkey.toString();
+        }
+        if (typeof account === 'number') {
+          // It's an index into accountKeys
+          const key = message.accountKeys[account];
+          return key?.pubkey?.toString() || key?.toString();
+        }
+        return account.toString();
+      });
 
       // Parse based on instruction type (data after discriminator)
       const instructionData = Buffer.from(data.slice(8));
@@ -130,9 +155,11 @@ export class FareVaultParser {
         return this.parseTrialResolve(instructionData, accounts, transaction);
       
       case 'pool_register':
+        return this.parsePoolRegister(instructionData, accounts, transaction);
+      
       case 'initialize':
       case 'update_vault_state':
-        // Skip non-bet transactions
+        // Skip non-essential transactions
         logger.debug({ name }, 'Skipping management transaction');
         return null;
       
@@ -164,23 +191,26 @@ export class FareVaultParser {
       amount = tokenTransfer;
     }
 
-    // Try to extract multiplier and extra_data_hash from logs
-    const { multiplier, extraDataHash } = this.extractFromLogs(transaction);
+    // Extract full TrialRegistered event data (includes Q/K arrays)
+    const trialEventData = this.parseTrialRegisteredEvent(transaction);
     
     // Parse extra_data_hash to extract game type
-    const gameType = this.extractGameTypeFromHash(extraDataHash);
+    const gameType = this.extractGameTypeFromHash(trialEventData.extraDataHash);
 
     return {
       type: 'trial_register',
       player,
       amount,
-      multiplier,
+      multiplier: trialEventData.multiplier,
       gameType,
       metadata: {
         accounts,
         trialAccount,
         poolId,
-        extraDataHash,
+        extraDataHash: trialEventData.extraDataHash,
+        q: trialEventData.q,
+        k: trialEventData.k,
+        qkWithConfigHash: trialEventData.qkWithConfigHash,
         instructionData: instructionData.toString('hex'),
         transaction,
       },
@@ -229,23 +259,160 @@ export class FareVaultParser {
   }
 
   /**
-   * Extract multiplier and extra_data_hash from event logs
+   * Parse pool_register (register a new pool)
+   * Accounts: [vault_state, pool, manager, system_program, ...]
+   * Args: Pool configuration data
    */
-  private extractFromLogs(transaction: any): { multiplier: number; extraDataHash: string } {
+  private parsePoolRegister(
+    instructionData: Buffer,
+    accounts: string[],
+    transaction: any
+  ): ParsedFareTransaction {
+    const poolAccount = accounts[1]; // Pool account being registered
+    const manager = accounts[2]; // Pool manager
+
+    // Extract event data from logs
+    const eventData = this.parseEventFromLogs(transaction, EVENT_DISCRIMINATORS.POOL_REGISTERED);
+    let poolEventData: any = {};
+    
+    if (eventData) {
+      try {
+        // PoolRegistered event structure (all f64 = 8 bytes each):
+        // pool_id: pubkey (32), manager: pubkey (32), fee_play_mult: f64, fee_loss_mult: f64,
+        // fee_mint_mult: f64, fee_host_pct: f64, fee_pool_pct: f64, min_limit: f64, probability: f64
+        let offset = 64; // Skip pool_id and manager (32 bytes each)
+        
+        poolEventData = {
+          feePlayMultiplier: eventData.readDoubleLE(offset), // f64 = double
+          feeLossMultiplier: eventData.readDoubleLE(offset + 8),
+          feeMintMultiplier: eventData.readDoubleLE(offset + 16),
+          feeHostPercent: eventData.readDoubleLE(offset + 24),
+          feePoolPercent: eventData.readDoubleLE(offset + 32),
+          minLimitForTicket: eventData.readDoubleLE(offset + 40),
+          probability: eventData.readDoubleLE(offset + 48),
+        };
+      } catch (error) {
+        logger.error({ error }, 'Error deserializing PoolRegistered event');
+      }
+    }
+
+    return {
+      type: 'pool_register',
+      player: manager,
+      amount: BigInt(0),
+      gameType: 'pool_management',
+      metadata: {
+        accounts,
+        poolAccount,
+        managerAddress: manager,
+        instructionData: instructionData.toString('hex'),
+        transaction,
+        ...poolEventData, // Include parsed event data
+      },
+    };
+  }
+
+  /**
+   * Extract event data from transaction logs
+   * Anchor programs emit events as "Program data: <base64>" in logMessages
+   */
+  private parseEventFromLogs(transaction: any, eventDiscriminator: Buffer): any | null {
     try {
-      // Look for TrialRegistered event in logs
       const logs = transaction.meta?.logMessages || [];
       
       for (const log of logs) {
-        // Event logs contain base64 encoded data
-        // Look for patterns that might indicate multiplier or hash
-        // TODO: Parse actual event data from logs
+        // Look for "Program data:" logs which contain base64 encoded events
+        if (log.startsWith('Program data: ')) {
+          const base64Data = log.replace('Program data: ', '');
+          const data = Buffer.from(base64Data, 'base64');
+          
+          // Check if discriminator matches
+          const disc = data.slice(0, 8);
+          if (disc.equals(eventDiscriminator)) {
+            return data.slice(8); // Return data after discriminator
+          }
+        }
       }
       
-      return { multiplier: 0, extraDataHash: '' };
+      return null;
     } catch (error) {
-      return { multiplier: 0, extraDataHash: '' };
+      logger.error({ error }, 'Error parsing event from logs');
+      return null;
     }
+  }
+  
+  /**
+   * Parse TrialRegistered event from logs to extract Q/K arrays and other data
+   * Event structure: { trial_id, who, pool_id, multiplier, qk: [[q1,k1], [q2,k2], ...], extra_data_hash }
+   */
+  private parseTrialRegisteredEvent(transaction: any): {
+    multiplier: number;
+    extraDataHash: string;
+    q: bigint[];
+    k: bigint[];
+    qkWithConfigHash: string;
+  } {
+    try {
+      const eventData = this.parseEventFromLogs(transaction, EVENT_DISCRIMINATORS.TRIAL_REGISTERED);
+      if (!eventData) {
+        return { multiplier: 0, extraDataHash: '', q: [], k: [], qkWithConfigHash: '' };
+      }
+
+      // Deserialize TrialRegistered event
+      // Format: trial_id (32), who (32), pool_id (32), multiplier (8), qk (variable), extra_data_hash (variable)
+      let offset = 0;
+      
+      // Skip trial_id, who, pool_id (32 bytes each = 96 bytes total)
+      offset += 96;
+      
+      // Read multiplier (u64 = 8 bytes)
+      const multiplier = Number(eventData.readBigUInt64LE(offset));
+      offset += 8;
+      
+      // Read QK array (vec of [f64, f64] pairs)
+      // First 4 bytes = length of vector
+      const qkLength = eventData.readUInt32LE(offset);
+      offset += 4;
+      
+      const q: bigint[] = [];
+      const k: bigint[] = [];
+      
+      // Each pair is 16 bytes (2 f64 values)
+      for (let i = 0; i < qkLength; i++) {
+        const qValue = eventData.readDoubleLE(offset);
+        offset += 8;
+        const kValue = eventData.readDoubleLE(offset);
+        offset += 8;
+        
+        // Convert f64 to BigInt (multiply by 1e18 for precision)
+        q.push(BigInt(Math.floor(qValue * 1e18)));
+        k.push(BigInt(Math.floor(kValue * 1e18)));
+      }
+      
+      // Read extra_data_hash (string - 4 bytes length + utf8 data)
+      const hashLength = eventData.readUInt32LE(offset);
+      offset += 4;
+      const extraDataHash = eventData.slice(offset, offset + hashLength).toString('utf8');
+      
+      // Compute qkWithConfigHash (similar to how Arbitrum does it)
+      // For now, use a simple hash of the q+k arrays
+      const qkStr = JSON.stringify({ q: q.map(String), k: k.map(String) });
+      const qkWithConfigHash = `qk-${Buffer.from(qkStr).toString('hex').slice(0, 32)}`;
+      
+      return { multiplier, extraDataHash, q, k, qkWithConfigHash };
+    } catch (error) {
+      logger.error({ error }, 'Error parsing TrialRegistered event');
+      return { multiplier: 0, extraDataHash: '', q: [], k: [], qkWithConfigHash: '' };
+    }
+  }
+  
+  /**
+   * Extract multiplier and extra_data_hash from event logs
+   * @deprecated Use parseTrialRegisteredEvent instead
+   */
+  private extractFromLogs(transaction: any): { multiplier: number; extraDataHash: string } {
+    const data = this.parseTrialRegisteredEvent(transaction);
+    return { multiplier: data.multiplier, extraDataHash: data.extraDataHash };
   }
 
   /**
@@ -318,7 +485,13 @@ export interface ParsedFareTransaction {
     accounts: string[];
     trialAccount?: string;
     poolId?: string;
+    poolAccount?: string;
+    managerAddress?: string;
     qk?: any;
+    q?: bigint[]; // Q array from TrialRegistered event
+    k?: bigint[]; // K array from TrialRegistered event
+    qkWithConfigHash?: string; // Computed hash
+    multiplier?: number; // Multiplier from event
     extraDataHash?: string;
     randomness?: number[];
     instructionData: any;

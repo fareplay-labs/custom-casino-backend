@@ -25,13 +25,33 @@ export const statsUpdateWorker = new Worker<StatsUpdateJob>(
     try {
       const db = getPrismaClient();
 
-      // Aggregate bet statistics for this casino
-      const betStats = await db.bet.aggregate({
-        where: { casinoId },
+      // Get casino's pool
+      const casino = await db.casino.findUnique({
+        where: { id: casinoId },
+        include: { pool: true },
+      });
+
+      if (!casino || !casino.poolAddress) {
+        logger.warn({ casinoId }, 'Casino or pool not found, skipping stats update');
+        return { updated: false, reason: 'no_pool' };
+      }
+
+      // Aggregate trial statistics for this casino's pool
+      const trialStats = await db.trial.aggregate({
+        where: {
+          poolAddress: casino.poolAddress,
+          casinoId,
+        },
         _count: { id: true },
-        _sum: {
-          amount: true,
-          payout: true,
+      });
+
+      // Count resolved vs pending trials
+      const resolvedCount = await db.trialResolved.count({
+        where: {
+          trial: {
+            poolAddress: casino.poolAddress,
+            casinoId,
+          },
         },
       });
 
@@ -40,15 +60,14 @@ export const statsUpdateWorker = new Worker<StatsUpdateJob>(
       });
 
       // Get or create stats record for this casino
-      let stats = await db.casinoStats.findFirst({
+      let stats = await db.casinoStats.findUnique({
         where: { casinoId },
-        orderBy: { updatedAt: 'desc' },
       });
 
       const statsData = {
-        totalBets: BigInt(betStats._count?.id || 0),
-        totalWagered: betStats._sum?.amount || BigInt(0),
-        totalPayout: betStats._sum?.payout || BigInt(0),
+        totalPlays: resolvedCount,
+        totalWagered: '0', // TODO: Sum from trial amounts
+        totalPayout: '0', // TODO: Sum from pool releases
         totalPlayers: playerCount,
       };
 
@@ -70,7 +89,7 @@ export const statsUpdateWorker = new Worker<StatsUpdateJob>(
       await publishStatsEvent(stats);
 
       logger.info({
-        totalBets: stats.totalBets.toString(),
+        totalPlays: stats.totalPlays,
         totalPlayers: stats.totalPlayers,
       }, 'Stats updated');
 
@@ -93,7 +112,7 @@ async function publishStatsEvent(stats: any): Promise<void> {
     const event = {
       type: 'stats.updated',
       data: {
-        totalBets: stats.totalBets.toString(),
+        totalPlays: stats.totalPlays,
         totalWagered: stats.totalWagered.toString(),
         totalPayout: stats.totalPayout.toString(),
         totalPlayers: stats.totalPlayers,

@@ -7,51 +7,80 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Casino {
-  id              String   @id @default(uuid())
-  
-  // Casino identity
-  name            String
-  slug            String   @unique
-  ownerWallet     String
-  
-  // Solana configuration
-  programId       String
-  network         String   // devnet, mainnet-beta
-  poolId          String?  // Fare Vault pool ID
-  
-  // URLs
-  apiUrl          String?
-  wsUrl           String?
-  frontendUrl     String?
-  
-  // Metadata
-  description     String?
-  logo            String?
-  banner          String?
-  theme           Json?    // Color scheme, branding
-  
-  // Configuration
-  config          Json?    // Game settings, limits, etc.
-  
-  // Status
-  status          CasinoStatus @default(ACTIVE)
-  isPublic        Boolean  @default(true)
-  
-  // Timestamps
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+// ============================================================================
+// USER & CASINO OWNERSHIP
+// ============================================================================
+
+model User {
+  id                String    @id @default(cuid())
+  walletAddress     String    @unique
+  username          String?
+  email             String?
+  avatarUrl         String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  lastSeenAt        DateTime?
   
   // Relations
-  players         Player[]
-  bets            Bet[]
-  stats           CasinoStats[]
-  chatMessages    ChatMessage[]
-  systemEvents    SystemEvent[]
+  casinos           Casino[]
+  media             Media[]
+  casinoDesignJobs  CasinoDesignJob[]
+  elementGenJobs    ElementGenerationJob[]
+  
+  @@index([walletAddress])
+}
+
+// ============================================================================
+// CASINO CUSTOMIZATION
+// ============================================================================
+
+model Casino {
+  id               String          @id @default(cuid())
+  ownerAddress     String
+  owner            User            @relation(fields: [ownerAddress], references: [walletAddress])
+  
+  // Casino identity
+  name             String
+  slug             String          @unique
+  shortDescription String?
+  longDescription  String?
+  
+  // Solana configuration
+  poolAddress      String?         // Solana pool account address
+  pool             Pool?           @relation(fields: [poolAddress], references: [address])
+  
+  // Branding
+  profileImage     String?
+  bannerImage      String?
+  font             String?
+  colors           Json?           // { primary, secondary, accent, background, text }
+  theme            Json?           // Additional theme customization
+  
+  // URLs & Links
+  apiUrl           String?
+  wsUrl            String?
+  frontendUrl      String?
+  socialLinks      Json?           // { twitter, discord, telegram, etc }
+  
+  // Status
+  status           CasinoStatus    @default(INACTIVE)
+  isPublic         Boolean         @default(true)
+  
+  // Timestamps
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  
+  // Relations
+  sections         CasinoSection[]
+  games            CasinoGame[]
+  stats            CasinoStats?
+  chatMessages     ChatMessage[]
+  players          Player[]
   
   @@index([slug])
-  @@index([ownerWallet])
+  @@index([ownerAddress])
   @@index([status])
+  @@index([poolAddress])
 }
 
 enum CasinoStatus {
@@ -61,26 +90,104 @@ enum CasinoStatus {
   SUSPENDED
 }
 
+model CasinoSection {
+  id          String   @id @default(cuid())
+  casinoId    String
+  casino      Casino   @relation(fields: [casinoId], references: [id], onDelete: Cascade)
+  
+  title       String
+  gameIds     String[] // Array of CasinoGame IDs
+  layout      String   // grid, carousel, list, etc.
+  order       Int      @default(0)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([casinoId])
+}
+
+model CasinoGame {
+  id           String            @id @default(cuid())
+  casinoId     String
+  casino       Casino            @relation(fields: [casinoId], references: [id], onDelete: Cascade)
+  
+  gameType     String            // References Game.name
+  game         Game              @relation(fields: [gameType], references: [name])
+  name         String            // Display name (can be customized)
+  description  String?
+  
+  isActive     Boolean           @default(true)
+  order        Int               @default(0)
+  
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  
+  // Relations
+  customConfig CustomGameConfig?
+  
+  @@index([casinoId])
+  @@index([gameType])
+}
+
+model CustomGameConfig {
+  id          String     @id @default(cuid())
+  gameId      String     @unique
+  game        CasinoGame @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  
+  name        String
+  description String?
+  parameters  Json       // Game-specific configuration
+  
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+model CasinoStats {
+  id            String   @id @default(cuid())
+  casinoId      String   @unique
+  casino        Casino   @relation(fields: [casinoId], references: [id], onDelete: Cascade)
+  
+  totalPlays    Int      @default(0)
+  totalWagered  Decimal         @db.Decimal(78, 0)   @default(0)
+  totalPayout   Decimal         @db.Decimal(78, 0)   @default(0)
+  totalPlayers  Int      @default(0)
+  
+  // Time-based stats
+  hourlyVolume  Json?    // { "timestamp": amount, ... }
+  dailyVolume   Json?
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@index([casinoId])
+}
+
+// ============================================================================
+// PLAYER (PER-CASINO USER)
+// ============================================================================
+
 model Player {
-  id              String   @id @default(uuid())
+  id              String   @id @default(cuid())
   casinoId        String
   casino          Casino   @relation(fields: [casinoId], references: [id])
   
   walletAddress   String
   username        String?
+  avatarUrl       String?
+  
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   lastSeenAt      DateTime @default(now())
   
-  // Stats (per casino)
+  // Per-casino stats
   totalBets       Int      @default(0)
   totalWins       Int      @default(0)
   totalLosses     Int      @default(0)
-  totalWagered    BigInt   @default(0)
-  totalPayout     BigInt   @default(0)
+  totalWagered    Decimal         @db.Decimal(78, 0)   @default(0)
+  totalPayout     Decimal         @db.Decimal(78, 0)   @default(0)
   
   // Relations
-  bets            Bet[]
+  trials          Trial[]
   chatMessages    ChatMessage[]
   
   @@unique([casinoId, walletAddress])
@@ -88,47 +195,12 @@ model Player {
   @@index([casinoId])
 }
 
-model Bet {
-  id              String   @id @default(uuid())
-  casinoId        String
-  casino          Casino   @relation(fields: [casinoId], references: [id])
-  playerId        String
-  player          Player   @relation(fields: [playerId], references: [id])
-  
-  // Transaction details
-  signature       String   @unique
-  blockTime       DateTime
-  slot            BigInt
-  
-  // Bet details
-  gameType        String
-  amount          BigInt
-  payout          BigInt   @default(0)
-  multiplier      Float?
-  
-  // Outcome
-  status          BetStatus @default(PENDING)
-  won             Boolean?
-  
-  // Metadata
-  metadata        Json?
-  createdAt       DateTime @default(now())
-  
-  @@index([casinoId])
-  @@index([playerId])
-  @@index([signature])
-  @@index([blockTime])
-  @@index([status])
-}
-
-enum BetStatus {
-  PENDING
-  SETTLED
-  FAILED
-}
+// ============================================================================
+// CHAT
+// ============================================================================
 
 model ChatMessage {
-  id              String   @id @default(uuid())
+  id              String   @id @default(cuid())
   casinoId        String
   casino          Casino   @relation(fields: [casinoId], references: [id])
   playerId        String
@@ -146,51 +218,506 @@ model ChatMessage {
   @@index([createdAt])
 }
 
-model CasinoStats {
-  id              String   @id @default(uuid())
-  casinoId        String
-  casino          Casino   @relation(fields: [casinoId], references: [id])
+// ============================================================================
+// MEDIA & FILE UPLOADS
+// ============================================================================
+
+model Media {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [walletAddress])
   
-  // Aggregated stats
-  totalBets       BigInt   @default(0)
-  totalWagered    BigInt   @default(0)
-  totalPayout     BigInt   @default(0)
-  totalPlayers    Int      @default(0)
+  fileName  String
+  fileType  String    // MIME type
+  mediaType MediaType
+  s3Key     String    // S3 storage path
+  cdnUrl    String    // CDN URL for access
+  size      Int       // File size in bytes
+  metadata  Json?
   
-  // Time-based stats
-  hourlyVolume    Json?    // { "2024-01-01T00:00:00Z": 1000000, ... }
-  dailyVolume     Json?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   
-  // Last updated
-  updatedAt       DateTime @updatedAt
+  @@index([userId])
+}
+
+enum MediaType {
+  IMAGE
+  AUDIO
+  VIDEO
+  DOCUMENT
+}
+
+// ============================================================================
+// CORE BLOCKCHAIN - POOL SYSTEM
+// ============================================================================
+
+model Pool {
+  address           String                   @id // Solana pool account address
+  poolRegistered    PoolRegistered           @relation(fields: [address], references: [poolAddress])
   
+  // Relations
+  poolManagerUpdates            PoolManagerUpdated[]
+  poolAccumulatedAmountUpdates  PoolAccumulatedAmountUpdated[]
+  poolAccumulatedAmountReleases PoolAccumulatedAmountReleased[]
+  fees              Fee[]
+  trials            Trial[]
+  casinos           Casino[]
+}
+
+model PoolRegisteredEvent {
+  orderIndex        Decimal         @id @db.Decimal(78, 0) // slot * 1e12 + instructionIndex * 1e6 + innerInstructionIndex
+  slot              Decimal         @db.Decimal(78, 0)
+  instructionIndex  Int
+  innerInstructionIndex Int
+  signature         String
+  blockTime         DateTime
+  
+  // Event specific data
+  poolAddress       String          @unique // Solana pool account address
+  managerAddress    String
+  feePlayMultiplier Decimal         @db.Decimal(78, 0)
+  feeLossMultiplier Decimal         @db.Decimal(78, 0)
+  feeMintMultiplier Decimal         @db.Decimal(78, 0)
+  feeHostPercent    Decimal         @db.Decimal(78, 0)
+  feePoolPercent    Decimal         @db.Decimal(78, 0)
+  minLimitForTicket Decimal         @db.Decimal(78, 0)
+  probability       Decimal         @db.Decimal(78, 0)
+  
+  // Relations
+  poolRegistered    PoolRegistered?
+  
+  @@unique([slot, instructionIndex, innerInstructionIndex])
+  @@index([signature])
+}
+
+model PoolRegistered {
+  id                  Decimal         @db.Decimal(78, 0)              @id
+  poolRegisteredEvent PoolRegisteredEvent @relation(fields: [id], references: [orderIndex])
+  poolAddress         String              @unique // Solana pool account address
+  pool                Pool?
+  managerAddress      String
+}
+
+model PoolManagerUpdatedEvent {
+  orderIndex            Decimal         @db.Decimal(78, 0)              @id
+  slot                  Decimal         @db.Decimal(78, 0)
+  instructionIndex      Int
+  innerInstructionIndex Int
+  signature             String
+  blockTime             DateTime
+  
+  poolAddress           String
+  newPoolManagerAddress String
+  
+  poolManagerUpdated    PoolManagerUpdated?
+  
+  @@unique([slot, instructionIndex, innerInstructionIndex])
+  @@index([signature])
+}
+
+model PoolManagerUpdated {
+  id                      Decimal         @db.Decimal(78, 0)                  @id
+  poolManagerUpdatedEvent PoolManagerUpdatedEvent @relation(fields: [id], references: [orderIndex])
+  poolAddress             String
+  pool                    Pool                    @relation(fields: [poolAddress], references: [address])
+  newPoolManagerAddress   String
+}
+
+model PoolAccumulatedAmountUpdatedEvent {
+  orderIndex               Decimal         @db.Decimal(78, 0)                        @id
+  slot                     Decimal         @db.Decimal(78, 0)
+  instructionIndex         Int
+  innerInstructionIndex    Int
+  signature                String
+  blockTime                DateTime
+  
+  poolAddress              String
+  trialId                  String
+  newAccumulatedAmount     Decimal         @db.Decimal(78, 0)
+  
+  poolAccumulatedAmountUpdated PoolAccumulatedAmountUpdated?
+  
+  @@unique([slot, instructionIndex, innerInstructionIndex])
+  @@index([signature])
+}
+
+model PoolAccumulatedAmountUpdated {
+  id                                Decimal         @db.Decimal(78, 0)                              @id
+  poolAccumulatedAmountUpdatedEvent PoolAccumulatedAmountUpdatedEvent   @relation(fields: [id], references: [orderIndex])
+  poolAddress                       String
+  pool                              Pool                                @relation(fields: [poolAddress], references: [address])
+  trialId                           String
+  trial                             Trial                               @relation(fields: [trialId], references: [id])
+}
+
+model PoolAccumulatedAmountReleasedEvent {
+  orderIndex                    Decimal         @db.Decimal(78, 0)                         @id
+  slot                          Decimal         @db.Decimal(78, 0)
+  instructionIndex              Int
+  innerInstructionIndex         Int
+  signature                     String
+  blockTime                     DateTime
+  
+  poolAddress                   String
+  trialId                       String                         @unique
+  receiver                      String
+  releasedAmount                Decimal         @db.Decimal(78, 0)
+  
+  poolAccumulatedAmountReleased PoolAccumulatedAmountReleased?
+  
+  @@unique([slot, instructionIndex, innerInstructionIndex])
+  @@index([signature])
+}
+
+model PoolAccumulatedAmountReleased {
+  id                                 Decimal         @db.Decimal(78, 0)                              @id
+  poolAccumulatedAmountReleasedEvent PoolAccumulatedAmountReleasedEvent  @relation(fields: [id], references: [orderIndex])
+  poolAddress                        String
+  pool                               Pool                                @relation(fields: [poolAddress], references: [address])
+  trialId                            String                              @unique
+  trial                              Trial                               @relation(fields: [trialId], references: [id])
+  receiver                           String
+}
+
+// ============================================================================
+// CORE BLOCKCHAIN - FEE SYSTEM
+// ============================================================================
+
+enum FeeType {
+  FeePlay
+  FeeLoss
+  FeeMint
+}
+
+model FeeChargedEvent {
+  orderIndex            Decimal         @db.Decimal(78, 0)       @id
+  slot                  Decimal         @db.Decimal(78, 0)
+  instructionIndex      Int
+  innerInstructionIndex Int
+  signature             String
+  blockTime             DateTime
+  
+  feeType               FeeType
+  poolAddress           String
+  trialId               String
+  feeAmount             Decimal         @db.Decimal(78, 0)
+  
+  feeCharged            FeeCharged?
+  
+  @@unique([slot, instructionIndex, innerInstructionIndex])
+  @@index([signature])
+}
+
+model FeeCharged {
+  id              Decimal         @db.Decimal(78, 0)          @id
+  feeChargedEvent FeeChargedEvent @relation(fields: [id], references: [orderIndex])
+  fee             Fee?
+}
+
+model Fee {
+  id             Decimal         @db.Decimal(78, 0)     @id
+  feeCharged     FeeCharged @relation(fields: [id], references: [id])
+  poolAddress    String
+  pool           Pool       @relation(fields: [poolAddress], references: [address])
+  trialId        String
+  trial          Trial      @relation(fields: [trialId], references: [id])
+  
+  hostPercent    Decimal         @db.Decimal(78, 0)
+  poolPercent    Decimal         @db.Decimal(78, 0)
+  burnPercent    Decimal?        @db.Decimal(78, 0)
+  networkPercent Decimal?        @db.Decimal(78, 0)
+  
+  hostAmount     Decimal         @db.Decimal(78, 0)
+  poolAmount     Decimal         @db.Decimal(78, 0)
+  burnAmount     Decimal?        @db.Decimal(78, 0)
+  networkAmount  Decimal?        @db.Decimal(78, 0)
+}
+
+// ============================================================================
+// CORE BLOCKCHAIN - TRIAL SYSTEM
+// ============================================================================
+
+model TrialRegisteredEvent {
+  orderIndex            Decimal         @db.Decimal(78, 0)           @id
+  slot                  Decimal         @db.Decimal(78, 0)
+  instructionIndex      Int
+  innerInstructionIndex Int
+  signature             String
+  blockTime             DateTime
+  
+  trialId               String           @unique
+  who                   String
+  poolAddress           String
+  multiplier            Decimal         @db.Decimal(78, 0)
+  qkWithConfigHash      String
+  vrfCostInFare         Decimal         @db.Decimal(78, 0)
+  extraDataHash         String
+  
+  trialRegistered       TrialRegistered?
+  
+  @@unique([slot, instructionIndex, innerInstructionIndex])
+  @@index([signature])
+}
+
+model TrialRegistered {
+  id                   Decimal         @db.Decimal(78, 0)               @id
+  trialRegisteredEvent TrialRegisteredEvent @relation(fields: [id], references: [orderIndex])
+  trialId              String               @unique
+  trial                Trial?
+}
+
+model TrialResolvedEvent {
+  orderIndex            Decimal         @db.Decimal(78, 0)          @id
+  slot                  Decimal         @db.Decimal(78, 0)
+  instructionIndex      Int
+  innerInstructionIndex Int
+  signature             String
+  blockTime             DateTime
+  
+  trialId               String          @unique
+  resultIndex           Int
+  randomness            Decimal         @db.Decimal(78, 0)
+  
+  trialResolved         TrialResolved?
+  
+  @@unique([slot, instructionIndex, innerInstructionIndex])
+  @@index([signature])
+}
+
+model TrialResolved {
+  id                 Decimal         @db.Decimal(78, 0)             @id
+  trialResolvedEvent TrialResolvedEvent @relation(fields: [id], references: [orderIndex])
+  trialId            String             @unique
+  trial              Trial              @relation(fields: [trialId], references: [id])
+}
+
+model Trial {
+  id                            String                          @id
+  trialRegistered               TrialRegistered                 @relation(fields: [id], references: [trialId])
+  trialResolved                 TrialResolved?
+  
+  poolAddress                   String
+  pool                          Pool                            @relation(fields: [poolAddress], references: [address])
+  
+  who                           String
+  player                        Player?                         @relation(fields: [casinoId, who], references: [casinoId, walletAddress])
+  casinoId                      String?
+  
+  qkWithConfigHash              String
+  qkWithConfigRegistered        QkWithConfigRegistered          @relation(fields: [qkWithConfigHash], references: [qkWithConfigHash])
+  
+  extraDataHash                 String
+  gameConfig                    GameConfig?                     @relation(fields: [extraDataHash], references: [gameConfigHash])
+  
+  gameInstance                  GameInstance?
+  
+  // Computed fields
+  resultK                       Decimal?        @db.Decimal(78, 0)
+  deltaAmount                   Decimal?        @db.Decimal(78, 0)
+  multiplierInUsdc              Decimal?        @db.Decimal(78, 0)
+  deltaAmountInUsdc             Decimal?        @db.Decimal(78, 0)
+  
+  // Relations
+  fees                          Fee[]
+  poolAccumulatedAmountUpdates  PoolAccumulatedAmountUpdated[]
+  poolAccumulatedAmountReleased PoolAccumulatedAmountReleased?
+  
+  @@index([who])
+  @@index([poolAddress])
   @@index([casinoId])
 }
 
-model SystemEvent {
-  id              String   @id @default(uuid())
-  casinoId        String?
-  casino          Casino?  @relation(fields: [casinoId], references: [id])
+// ============================================================================
+// GAME SYSTEM - PROBABILITY CONFIGURATION
+// ============================================================================
+
+model QkWithConfigRegisteredEvent {
+  orderIndex            Decimal         @db.Decimal(78, 0)                      @id
+  slot                  Decimal         @db.Decimal(78, 0)
+  instructionIndex      Int
+  innerInstructionIndex Int
+  signature             String
+  blockTime             DateTime
   
-  eventType       String
-  severity        EventSeverity @default(INFO)
-  message         String
-  metadata        Json?
+  qkWithConfigHash      String                      @unique
+  q                     Decimal[]       @db.Decimal(78, 0)
+  k                     Decimal[]       @db.Decimal(78, 0)
+  feeLossMultiplier     Decimal         @db.Decimal(78, 0)
+  feeMintMultiplier     Decimal         @db.Decimal(78, 0)
+  effectiveEv           Decimal         @db.Decimal(78, 0)
   
-  createdAt       DateTime @default(now())
+  qkWithConfigRegistered QkWithConfigRegistered?
   
-  @@index([casinoId])
-  @@index([eventType])
-  @@index([severity])
+  @@unique([slot, instructionIndex, innerInstructionIndex])
+  @@index([signature])
+  @@map("QKWithConfigRegisteredEvent")
+}
+
+model QkWithConfigRegistered {
+  id                          Decimal         @db.Decimal(78, 0)                      @id
+  qkWithConfigHash            String                      @unique
+  qkWithConfigRegisteredEvent QkWithConfigRegisteredEvent @relation(fields: [id], references: [orderIndex])
+  trials                      Trial[]
+  
+  @@map("QKWithConfigRegistered")
+}
+
+// ============================================================================
+// GAME SYSTEM - GAME CONFIGURATION
+// ============================================================================
+
+model Game {
+  name            String       @id
+  displayName     String
+  description     String?
+  qkRelatedFields String[]     // Fields related to Q/K probability
+  otherFields     String[]     // Other configuration fields
+  
+  gameConfig      GameConfig[]
+  casinoGames     CasinoGame[]
+  
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+}
+
+model GameConfig {
+  gameConfigHash String         @id // extraDataHash
+  config         Json           // Full game configuration
+  gameName       String
+  game           Game           @relation(fields: [gameName], references: [name])
+  gameSetup      GameSetup?     @relation(fields: [gameSetupId], references: [id])
+  gameSetupId    Int?
+  
+  trial          Trial[]
+  gameInstance   GameInstance[]
+  
+  @@index([gameName])
+}
+
+model GameSetup {
+  id                       Int          @id @default(autoincrement())
+  kToMs                    Json         // { "k_value": [[m1], [m2]], ... }
+  mToPossibleOrderingCount Json         // { "[m1,m2,m3]": count, ... }
+  emittedSortedQ           Decimal[]       @db.Decimal(78, 0)
+  emittedSortedK           Decimal[]       @db.Decimal(78, 0)
+  gameConfigs              GameConfig[]
+}
+
+model GameInstance {
+  id             String     @id // Same as trial ID
+  trial          Trial      @relation(fields: [id], references: [id])
+  gameConfigHash String
+  gameConfig     GameConfig @relation(fields: [gameConfigHash], references: [gameConfigHash])
+  result         Json?      // Game-specific result details
+  
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+}
+
+// ============================================================================
+// AI GENERATION SYSTEM
+// ============================================================================
+
+model CasinoDesignJob {
+  id              String          @id @default(cuid())
+  userAddress     String
+  user            User            @relation(fields: [userAddress], references: [walletAddress])
+  
+  casinoName      String
+  userPrompt      String
+  poolId          Int?
+  
+  status          JobStatus       @default(PENDING)
+  progress        Int             @default(0)
+  currentStep     String?
+  stepResults     Json            // Intermediate results
+  result          Json?           // Final casino entity
+  error           String?
+  config          Json            // Generation configuration
+  
+  startedAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  completedAt     DateTime?
+  
+  generatedImages GeneratedImage[]
+  
+  @@index([userAddress])
+  @@index([status])
+  @@index([startedAt])
+}
+
+model ElementGenerationJob {
+  id              String          @id @default(cuid())
+  userAddress     String
+  user            User            @relation(fields: [userAddress], references: [walletAddress])
+  
+  gameType        String
+  parameterId     String?
+  userPrompt      String
+  finalPrompt     String
+  
+  status          JobStatus       @default(PENDING)
+  progress        Int             @default(0)
+  currentStep     String?
+  result          Json?           // Generated image result
+  error           String?
+  config          Json            // Generation configuration
+  
+  startedAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  completedAt     DateTime?
+  
+  generatedImages GeneratedImage[]
+  
+  @@index([userAddress])
+  @@index([status])
+  @@index([startedAt])
+}
+
+model GeneratedImage {
+  id                   String                @id @default(cuid())
+  jobId                String?
+  elementJobId         String?
+  userAddress          String
+  
+  prompt               String
+  imageUrl             String                // S3 CDN URL
+  s3Key                String                // S3 object key
+  metadata             Json?
+  
+  createdAt            DateTime              @default(now())
+  
+  casinoDesignJob      CasinoDesignJob?      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  elementGenerationJob ElementGenerationJob? @relation(fields: [elementJobId], references: [id], onDelete: Cascade)
+  
+  @@index([jobId])
+  @@index([elementJobId])
+  @@index([userAddress])
   @@index([createdAt])
 }
 
-enum EventSeverity {
-  DEBUG
-  INFO
-  WARN
-  ERROR
-  CRITICAL
+model GenerationMetadata {
+  id          String   @id @default(cuid())
+  userAddress String
+  
+  type        String   // 'casino' | 'element' | 'image'
+  gameId      String?
+  prompt      String
+  result      Json
+  
+  timestamp   DateTime @default(now())
+  
+  @@index([userAddress])
+  @@index([type])
+  @@index([timestamp])
 }
 
-
+enum JobStatus {
+  PENDING
+  PROCESSING
+  COMPLETE
+  CONVERTED
+  ERROR
+  CANCELLED
+}

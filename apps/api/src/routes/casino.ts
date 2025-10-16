@@ -24,13 +24,14 @@ export async function casinoRoutes(fastify: FastifyInstance): Promise<void> {
     return {
       name: casino.name,
       slug: casino.slug,
-      owner: casino.ownerWallet,
-      network: casino.network,
-      programId: casino.programId,
-      poolId: casino.poolId,
-      description: casino.description,
-      logo: casino.logo,
+      owner: casino.ownerAddress,
+      poolAddress: casino.poolAddress,
+      shortDescription: casino.shortDescription,
+      longDescription: casino.longDescription,
+      profileImage: casino.profileImage,
+      bannerImage: casino.bannerImage,
       frontendUrl: casino.frontendUrl,
+      theme: casino.theme,
     };
   });
 
@@ -60,22 +61,12 @@ export async function casinoRoutes(fastify: FastifyInstance): Promise<void> {
     const playerCount = await db.player.count({
       where: { casinoId: casino.id },
     });
-    
-    const recentBets = await db.bet.count({
-      where: {
-        casinoId: casino.id,
-        createdAt: {
-          gte: new Date(Date.now() - 24 * 60 * 60 * 1000), // Last 24 hours
-        },
-      },
-    });
 
     return {
-      totalBets: stats?.totalBets?.toString() || '0',
+      totalPlays: stats?.totalPlays || 0,
       totalWagered: stats?.totalWagered?.toString() || '0',
       totalPayout: stats?.totalPayout?.toString() || '0',
       totalPlayers: playerCount,
-      recentBets24h: recentBets,
       lastUpdated: stats?.updatedAt || new Date(),
     };
   });
@@ -89,30 +80,33 @@ export async function casinoRoutes(fastify: FastifyInstance): Promise<void> {
       100
     );
 
-    const recentBets = await db.bet.findMany({
+    const casinoSlug = (request.query as any).casino || request.headers['x-casino-slug'];
+    const casino = casinoSlug ? await db.casino.findUnique({
+      where: { slug: casinoSlug as string },
+    }) : null;
+
+    const recentTrials = await db.trial.findMany({
+      where: casino ? { casinoId: casino.id } : {},
       take: limit,
-      orderBy: { blockTime: 'desc' },
+      orderBy: { id: 'desc' },
       include: {
-        player: {
-          select: {
-            walletAddress: true,
-            username: true,
+        trialRegistered: {
+          include: {
+            trialRegisteredEvent: true,
           },
         },
+        trialResolved: true,
       },
     });
 
     return {
-      bets: recentBets.map((bet: any) => ({
-        id: bet.id,
-        signature: bet.signature,
-        player: bet.player.username || 
-          `${bet.player.walletAddress.slice(0, 4)}...${bet.player.walletAddress.slice(-4)}`,
-        gameType: bet.gameType,
-        amount: bet.amount.toString(),
-        payout: bet.payout.toString(),
-        won: bet.won,
-        timestamp: bet.blockTime,
+      trials: recentTrials.map((trial: any) => ({
+        id: trial.id,
+        player: `${trial.who.slice(0, 4)}...${trial.who.slice(-4)}`,
+        poolAddress: trial.poolAddress,
+        resolved: !!trial.trialResolved,
+        deltaAmount: trial.deltaAmount?.toString(),
+        timestamp: trial.trialRegistered?.trialRegisteredEvent.blockTime,
       })),
     };
   });

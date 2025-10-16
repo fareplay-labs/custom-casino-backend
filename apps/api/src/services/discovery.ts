@@ -22,9 +22,7 @@ export async function registerDiscovery(): Promise<void> {
     //   wsUrl: `ws://${config.wsHost}:${config.wsPort}`,
     // });
 
-    logger.info({
-      discoveryUrl: config.discoveryUrl,
-    }, 'Casino discovery registration - will register all active casinos');
+    logger.info('Casino discovery registration - will register all active casinos');
 
     // Start heartbeat
     startHeartbeat();

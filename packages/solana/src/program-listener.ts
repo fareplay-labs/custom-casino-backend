@@ -1,6 +1,6 @@
 import { PublicKey, ParsedTransactionWithMeta, Connection } from '@solana/web3.js';
 import { getConnection } from './connection.js';
-import { createLogger } from '@fareplay/utils';
+import { createLogger, config } from '@fareplay/utils';
 
 const logger = createLogger('solana:program-listener');
 
@@ -110,14 +110,23 @@ export class ProgramListener {
       // WebSocket subscriptions not supported - that's okay, backfill will handle it
     }
 
-    // Do an initial backfill of recent transactions
-    await this.backfillRecentTransactions(callback, 10);
+    // Do an initial backfill of recent transactions (if enabled)
+    if (config.backfillEnabled) {
+      logger.info({ 
+        limit: config.backfillLimit,
+        usingDedicatedRpc: !!config.backfillRpcUrl,
+      }, 'Starting backfill');
+      
+      await this.backfillRecentTransactions(callback, config.backfillLimit);
+    } else {
+      logger.info('Backfill disabled, will only process new transactions');
+    }
 
     // If WebSocket subscription failed, exit with error
     if (this.subscriptionId === null) {
       throw new Error(
         'WebSocket subscription failed. Your RPC provider may not support logsSubscribe. ' +
-        'Please use Helius (https://helius.dev) or QuickNode (https://quicknode.com) for WebSocket support.'
+        'Use the official Solana public RPC: https://api.mainnet-beta.solana.com'
       );
     }
   }
@@ -135,50 +144,90 @@ export class ProgramListener {
 
   /**
    * Backfill recent transactions on startup
+   * Uses separate RPC if configured to avoid rate limits
    */
   private async backfillRecentTransactions(
     callback: (event: ProgramEvent) => Promise<void>,
     limit: number = 10
   ): Promise<void> {
-    try {
-      logger.info({ limit }, 'Backfilling recent transactions');
+    // Use dedicated backfill RPC if provided, otherwise use main connection
+    const backfillConnection = config.backfillRpcUrl
+      ? new Connection(config.backfillRpcUrl, { commitment: 'confirmed' })
+      : this.connection;
 
-      const signatures = await this.connection.getSignaturesForAddress(
+    if (config.backfillRpcUrl) {
+      logger.info('Using dedicated RPC endpoint for backfill');
+    }
+
+    try {
+      const signatures = await backfillConnection.getSignaturesForAddress(
         this.programId,
         { limit }
       );
 
+      logger.info({ found: signatures.length }, 'Fetched signatures for backfill');
+
       // Process in reverse order (oldest first)
       const sortedSignatures = signatures.reverse();
 
-      for (const sigInfo of sortedSignatures) {
+      for (let i = 0; i < sortedSignatures.length; i++) {
+        const sigInfo = sortedSignatures[i];
+
         // Skip if already processed or has error
         if (this.processedSignatures.has(sigInfo.signature) || sigInfo.err) {
           continue;
         }
 
-        const transaction = await this.connection.getParsedTransaction(
-          sigInfo.signature,
-          { maxSupportedTransactionVersion: 0 }
-        );
+        try {
+          // Add delay between requests to avoid rate limits (200ms per request)
+          if (i > 0) {
+            await this.sleep(200);
+          }
 
-        if (transaction) {
-          const event: ProgramEvent = {
+          const transaction = await backfillConnection.getParsedTransaction(
+            sigInfo.signature,
+            { maxSupportedTransactionVersion: 0 }
+          );
+
+          if (transaction) {
+            const event: ProgramEvent = {
+              signature: sigInfo.signature,
+              slot: sigInfo.slot,
+              blockTime: sigInfo.blockTime || null,
+              transaction,
+            };
+
+            this.processedSignatures.add(sigInfo.signature);
+            await callback(event);
+
+            logger.debug({ 
+              signature: sigInfo.signature,
+              progress: `${i + 1}/${sortedSignatures.length}`,
+            }, 'Backfilled transaction');
+          }
+        } catch (error) {
+          // Log but continue on errors
+          logger.warn({ 
+            error: error instanceof Error ? error.message : String(error),
             signature: sigInfo.signature,
-            slot: sigInfo.slot,
-            blockTime: sigInfo.blockTime || null,
-            transaction,
-          };
-
-          this.processedSignatures.add(sigInfo.signature);
-          await callback(event);
+          }, 'Error backfilling transaction, skipping');
         }
       }
 
       logger.info({ count: sortedSignatures.length }, 'Backfill complete');
     } catch (error) {
-      logger.error({ error }, 'Error during backfill');
+      logger.error({ 
+        error: error instanceof Error ? error.message : String(error),
+      }, 'Error during backfill - continuing with real-time only');
+      // Don't throw - backfill failure shouldn't crash the processor
     }
+  }
+
+  /**
+   * Sleep utility
+   */
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }
 
